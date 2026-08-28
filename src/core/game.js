@@ -82,17 +82,17 @@ window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") keys.Shift = false;
 });
 
-// Mecánica Estrella: Activar el Clon Temporal (¡REPARADO!)
+// Mecánica Estrella: Activar el Clon Temporal (¡AHORA SÍ REPARADO!)
 function triggerShiftMechanic() {
     ghost.historyRoute = [...playerHistory];
     ghost.currentFrame = 0;
     ghost.active = true;
 
-    // REPARACIÓN: Extraer el primer elemento guardado en el array de forma segura
-    const pastState = playerHistory[0]; 
-    if (pastState && pastState.x !== undefined) {
-        player.x = pastState.x;
-        player.y = pastState.y;
+    // SOLUCIÓN: Acceder correctamente a la primera posición guardada en la lista del pasado
+    const firstPastFrame = playerHistory[0]; 
+    if (firstPastFrame && firstPastFrame.x !== undefined) {
+        player.x = firstPastFrame.x;
+        player.y = firstPastFrame.y;
     }
     player.velocityY = 0;
     
