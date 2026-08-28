@@ -2,39 +2,58 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-// 2. Estado del Jugador
-const player = {
-    x: 100, y: 400, size: 16, speed: 4, color: "#00FFCC",
-    velocityY: 0, gravity: 0.5, jumpForce: -11, isJumping: false, groundY: 550
+// 2. Estado del Juego y la Misión
+let gameState = "PLAYING"; // PLAYING, WIN, GAME_OVER
+const mission = {
+    objective: "Roba el Núcleo de Datos y ve a la Zona de Extracción.",
+    hasIntel: false, // ¿Ya recogió el objetivo?
+    intelX: 630, intelY: 200, intelSize: 12,
+    extractX: 100, extractY: 210, extractW: 40, extractH: 10
 };
 
-// 3. Sistema de Registro de Tiempo (Para el Rebobinado)
-let playerHistory = [];
-const maxHistoryFrames = 180; // 3 segundos a 60 fotogramas por segundo
+// 3. Estado del Jugador
+const player = {
+    x: 100, y: 450, size: 16, speed: 4.5, color: "#00FFCC",
+    imgX: 100, imgY: 450, // Para efectos visuales suaves
+    velocityY: 0, gravity: 0.5, jumpForce: -11.5, isJumping: false, groundY: 550
+};
 
-// 4. El Clon Fantasma
+// 4. El Clon Fantasma (Tu eco del pasado)
 const ghost = {
     x: -100, y: -100, size: 16, active: false,
-    historyRoute: [], currentFrame: 0, color: "rgba(235, 94, 40, 0.8)" // Naranja neón fantasmal
+    historyRoute: [], currentFrame: 0, color: "rgba(255, 100, 0, 0.8)"
 };
+let playerHistory = [];
+const maxHistoryFrames = 180; 
 
-// 5. Sistema de Eco (Ondas activas)
+// 5. Sistema de Eco (Ondas)
 const echoes = [];
-function spawnEcho(x, y) {
-    echoes.push({ x: x, y: y, radius: 0, maxRadius: 180, speed: 5, alpha: 1.0 });
+function spawnEcho(x, y, maxR = 180) {
+    echoes.push({ x: x, y: y, radius: 0, maxRadius: maxR, speed: 5.5, alpha: 1.0 });
 }
 
-// 6. Mapa Invisible (Obstáculos)
+// 6. Mapa Invisible Avanzado (Estructura del Nivel)
 const platforms = [
-    { x: 250, y: 430, w: 120, h: 15, alpha: 0 },
-    { x: 450, y: 320, w: 150, h: 15, alpha: 0 },
-    { x: 200, y: 220, w: 100, h: 15, alpha: 0 },
-    { x: 600, y: 450, w: 100, h: 15, alpha: 0 }
+    // Camino de ida (Abajo hacia la derecha)
+    { x: 220, y: 440, w: 140, h: 15, alpha: 0 },
+    { x: 420, y: 350, w: 140, h: 15, alpha: 0 },
+    { x: 600, y: 240, w: 100, h: 15, alpha: 0 }, // Aquí está el Intel
+    // Camino de regreso (Arriba hacia la izquierda)
+    { x: 400, y: 200, w: 120, h: 15, alpha: 0 },
+    { x: 220, y: 260, w: 120, h: 15, alpha: 0 },
+    { x: 80,  y: 220, w: 80,  h: 15, alpha: 0 }  // Aquí está la extracción
 ];
 
-// Controles (Añadimos Shift)
+// 7. Trampas Invisibles: Láseres de Seguridad (Te matan al tocarlos)
+const hazards = [
+    { x1: 390, y1: 250, x2: 390, y2: 440, alpha: 0 }, // Láser vertical barrera 1
+    { x1: 580, y1: 100, x2: 580, y2: 350, alpha: 0 }  // Láser vertical protegiendo el Intel
+];
+
+// Controles del Teclado
 const keys = { ArrowLeft: false, ArrowRight: false, Space: false, Shift: false };
 window.addEventListener("keydown", (e) => {
+    if (gameState !== "PLAYING") return;
     if (e.key === "ArrowLeft") keys.ArrowLeft = true;
     if (e.key === "ArrowRight") keys.ArrowRight = true;
     if (e.key === " " || e.code === "Space") {
@@ -49,14 +68,13 @@ window.addEventListener("keydown", (e) => {
         e.preventDefault();
     }
     if (e.key === "Shift") {
-        if (!keys.Shift && playerHistory.length > 10) {
+        if (!keys.Shift && playerHistory.length > 20) {
             keys.Shift = true;
             triggerShiftMechanic();
         }
         e.preventDefault();
     }
 });
-
 window.addEventListener("keyup", (e) => {
     if (e.key === "ArrowLeft") keys.ArrowLeft = false;
     if (e.key === "ArrowRight") keys.ArrowRight = false;
@@ -64,47 +82,61 @@ window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") keys.Shift = false;
 });
 
-// Mecánica Estrella: Activar el Clon Temporal
 function triggerShiftMechanic() {
-    // 1. Clonar la ruta del pasado y activar al fantasma
     ghost.historyRoute = [...playerHistory];
     ghost.currentFrame = 0;
     ghost.active = true;
 
-    // 2. Teletransportar al jugador real al inicio de sus últimos 3 segundos
     const pastState = playerHistory[0];
     player.x = pastState.x;
     player.y = pastState.y;
     player.velocityY = 0;
     
-    // 3. Crear un eco masivo por la distorsión del tiempo
-    spawnEcho(player.x + player.size/2, player.y + player.size/2);
-    
-    // Limpiar historial para el nuevo bucle
+    spawnEcho(player.x + player.size/2, player.y + player.size/2, 250); // Onda expansiva sónica masiva
     playerHistory = [];
 }
 
-// 7. Lógica de Actualización
+// Reiniciar el nivel en caso de muerte o victoria
+window.addEventListener("click", () => {
+    if (gameState !== "PLAYING") {
+        player.x = 100; player.y = 400; player.velocityY = 0;
+        mission.hasIntel = false;
+        ghost.active = false;
+        playerHistory = [];
+        echoes.length = 0;
+        platforms.forEach(p => p.alpha = 0);
+        hazards.forEach(h => h.alpha = 0);
+        gameState = "PLAYING";
+    }
+});
+
+// 8. Lógica del Juego
 function update() {
-    // Movimiento del jugador
+    if (gameState !== "PLAYING") return;
+
+    // Movimiento
     if (keys.ArrowLeft && player.x > 0) player.x -= player.speed;
     if (keys.ArrowRight && player.x < canvas.width - player.size) player.x += player.speed;
 
     player.velocityY += player.gravity;
     player.y += player.velocityY;
 
+    // Interpolación visual para el jugador (Suavizado de cámara interna)
+    player.imgX += (player.x - player.imgX) * 0.4;
+    player.imgY += (player.y - player.imgY) * 0.4;
+
     // Colisión Suelo
     if (player.y >= player.groundY - player.size) {
-        if (player.velocityY > 1) spawnEcho(player.x + player.size/2, player.groundY);
+        if (player.velocityY > 1.5) spawnEcho(player.x + player.size/2, player.groundY);
         player.y = player.groundY - player.size;
         player.velocityY = 0;
         player.isJumping = false;
     }
 
-    // Colisión con Plataformas
+    // Colisión Plataformas
     platforms.forEach(plat => {
         if (player.x + player.size > plat.x && player.x < plat.x + plat.w &&
-            player.y + player.size >= plat.y && player.y + player.size <= plat.y + 10 &&
+            player.y + player.size >= plat.y && player.y + player.size <= plat.y + 8 &&
             player.velocityY > 0) {
                 player.y = plat.y - player.size;
                 player.velocityY = 0;
@@ -112,31 +144,53 @@ function update() {
         }
     });
 
-    // Guardar historial del jugador (Buffer circular)
-    playerHistory.push({ x: player.x, y: player.y, jumping: player.isJumping });
-    if (playerHistory.length > maxHistoryFrames) {
-        playerHistory.shift();
+    // Misión: Recoger el Intel (Núcleo)
+    if (!mission.hasIntel) {
+        let dx = (player.x + player.size/2) - mission.intelX;
+        let dy = (player.y + player.size/2) - mission.intelY;
+        if (Math.sqrt(dx*dx + dy*dy) < player.size + mission.intelSize) {
+            mission.hasIntel = true;
+            spawnEcho(mission.intelX, mission.intelY, 300); // Destello sónico al robarlo
+        }
     }
 
-    // Lógica del Clon Fantasma (Reproduce el pasado)
+    // Misión: Llegar a Extracción (Solo si ya tiene el Intel)
+    if (mission.hasIntel && 
+        player.x + player.size > mission.extractX && player.x < mission.extractX + mission.extractW &&
+        player.y + player.size >= mission.extractY && player.y <= mission.extractY + mission.extractH) {
+            gameState = "WIN";
+    }
+
+    // Guardar historial del jugador
+    playerHistory.push({ x: player.x, y: player.y });
+    if (playerHistory.length > maxHistoryFrames) playerHistory.shift();
+
+    // Lógica del Clon Fantasma (Copia tus pasos y genera ecos autónomos)
     if (ghost.active) {
         if (ghost.currentFrame < ghost.historyRoute.length) {
             let frameData = ghost.historyRoute[ghost.currentFrame];
-            
-            // Si en ese frame del pasado el jugador saltó o pisó fuerte, el fantasma genera un eco
-            if (ghost.currentFrame % 30 === 0) {
-                spawnEcho(frameData.x + ghost.size/2, frameData.y + ghost.size/2);
+            if (ghost.currentFrame % 25 === 0) {
+                spawnEcho(frameData.x + ghost.size/2, frameData.y + ghost.size/2, 130);
             }
-
             ghost.x = frameData.x;
             ghost.y = frameData.y;
             ghost.currentFrame++;
         } else {
-            ghost.active = false; // El fantasma desaparece al terminar su ruta
+            ghost.active = false;
         }
     }
 
-    // Actualizar ondas de eco
+    // Colisión Letal con Láseres de Seguridad (Muerte instantánea)
+    hazards.forEach(laser => {
+        // Validación de colisión caja contra línea vertical
+        if (player.x + player.size >= laser.x1 - 2 && player.x <= laser.x1 + 2 &&
+            player.y + player.size >= Math.min(laser.y1, laser.y2) && player.y <= Math.max(laser.y1, laser.y2)) {
+                gameState = "GAME_OVER";
+                spawnEcho(player.x, player.y, 400); // Explosión visual
+        }
+    });
+
+    // Ondas de eco
     for (let i = echoes.length - 1; i >= 0; i--) {
         let echo = echoes[i];
         echo.radius += echo.speed;
@@ -144,74 +198,73 @@ function update() {
         if (echo.radius >= echo.maxRadius) echoes.splice(i, 1);
     }
 
-    // Iluminación de plataformas
+    // Iluminación matemática de Entidades (Plataformas y Láseres)
     platforms.forEach(plat => {
         let maxIllumination = 0;
         echoes.forEach(echo => {
             let dx = (plat.x + plat.w/2) - echo.x;
             let dy = (plat.y + plat.h/2) - echo.y;
             let distance = Math.sqrt(dx*dx + dy*dy);
-            if (Math.abs(distance - echo.radius) < 40) {
-                let brightness = echo.alpha * 0.8;
+            if (Math.abs(distance - echo.radius) < 50) {
+                let brightness = echo.alpha * 0.9;
                 if (brightness > maxIllumination) maxIllumination = brightness;
             }
         });
         plat.alpha = Math.max(plat.alpha - 0.02, maxIllumination);
     });
+
+    hazards.forEach(laser => {
+        let maxIllumination = 0;
+        echoes.forEach(echo => {
+            // Distancia al centro del láser
+            let midY = (laser.y1 + laser.y2) / 2;
+            let dx = laser.x1 - echo.x;
+            let dy = midY - echo.y;
+            let distance = Math.sqrt(dx*dx + dy*dy);
+            if (Math.abs(distance - echo.radius) < 60) {
+                let brightness = echo.alpha * 1.0;
+                if (brightness > maxIllumination) maxIllumination = brightness;
+            }
+        });
+        laser.alpha = Math.max(laser.alpha - 0.03, maxIllumination);
+    });
 }
 
-// 8. Renderizado
+// 9. Gráficos y Renderizado Estético (Cyberpunk Minimalista)
 function draw() {
-    ctx.fillStyle = "#000000";
+    // Fondo Oscuro
+    ctx.fillStyle = "#020204";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Dibujar ondas
+    // Rejilla de fondo sutil para dar profundidad espacial
+    ctx.strokeStyle = "#080812";
+    ctx.lineWidth = 1;
+    for(let i=0; i<canvas.width; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+    }
+    for(let j=0; j<canvas.height; j+=40) {
+        ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke();
+    }
+
+    // Dibujar ondas de sonido
     echoes.forEach(echo => {
-        ctx.strokeStyle = `rgba(0, 255, 204, ${echo.alpha * 0.3})`;
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(echo.x, echo.y, echo.radius, 0, Math.PI * 2);
-        ctx.stroke();
+        ctx.strokeStyle = `rgba(0, 255, 204, ${echo.alpha * 0.25})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.arc(echo.x, echo.y, echo.radius, 0, Math.PI * 2); ctx.stroke();
     });
 
-    // Dibujar plataformas
+    // Dibujar Plataformas Reveladas
     platforms.forEach(plat => {
-        ctx.fillStyle = `rgba(255, 255, 255, ${plat.alpha})`;
+        ctx.fillStyle = `rgba(30, 41, 59, ${plat.alpha * 0.8})`;
         ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
         ctx.strokeStyle = `rgba(0, 255, 204, ${plat.alpha})`;
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         ctx.strokeRect(plat.x, plat.y, plat.w, plat.h);
     });
 
-    // Dibujar Suelo
-    ctx.strokeStyle = "#111111";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, player.groundY);
-    ctx.lineTo(canvas.width, player.groundY);
-    ctx.stroke();
-
-    // Dibujar al Clon Fantasma (Si está activo)
-    if (ghost.active) {
-        ctx.fillStyle = ghost.color;
-        ctx.fillRect(ghost.x, ghost.y, ghost.size, ghost.size);
-    }
-
-    // Dibujar al Jugador Real
-    ctx.fillStyle = player.color;
-    ctx.fillRect(player.x, player.y, player.size, player.size);
-
-    // Interfaz de Usuario Profesional
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.font = "14px Courier New";
-    ctx.fillText("PROTOTIPO: ECHOSHIFT v1.0", 20, 30);
-    ctx.fillText("CONTROLES: Flechas = Moverse | Espacio = Saltar | SHIFT = Rebobinar e invocar Clon", 20, 50);
-    
-    if (ghost.active) {
-        ctx.fillStyle = "#EB5E28";
-        ctx.fillText("ANOMALÍA TEMPORAL DETECTADA: CLON ACTIVO", 20, 75);
-    }
-}
-
-function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
-window.onload = gameLoop;
+    // Dibujar Láseres de Seguridad (Rojo Neón Amenazante si se iluminan)
+    hazards.forEach(laser => {
+        ctx.strokeStyle = `rgba(255, 50, 50, ${laser.alpha})`;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = "red";
+        ctx.shadowBlur = laser.alpha * 10;
