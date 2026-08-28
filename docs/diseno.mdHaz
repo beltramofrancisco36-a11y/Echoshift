@@ -1,0 +1,9 @@
+# Echoshift - Documento de Diseño
+
+## Core Gameplay
+El jugador se mueve en un lienzo oscuro. Cada acción genera ondas expansivas (círculos) que iluminan los obstáculos del mapa durante 1.5 segundos.
+
+## Controles
+- **Flechas / WASD**: Movimiento del personaje.
+- **Espacio**: Generar pulso de sonido manual.
+- **Shift**: Rebobinar 3 segundos en el tiempo.
