@@ -82,15 +82,15 @@ window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") keys.Shift = false;
 });
 
-// Mecánica Estrella: Activar el Clon Temporal (FIXED)
+// Mecánica Estrella: Activar el Clon Temporal (¡REPARADO!)
 function triggerShiftMechanic() {
     ghost.historyRoute = [...playerHistory];
     ghost.currentFrame = 0;
     ghost.active = true;
 
-    // FIX: Tomar de forma segura el estado inicial del historial
+    // REPARACIÓN: Extraer el primer elemento guardado en el array de forma segura
     const pastState = playerHistory[0]; 
-    if (pastState) {
+    if (pastState && pastState.x !== undefined) {
         player.x = pastState.x;
         player.y = pastState.y;
     }
@@ -115,7 +115,7 @@ window.addEventListener("click", () => {
     }
 });
 
-// 8. Lógica del Juego
+// 8. Lógica de Actualización
 function update() {
     if (gameState !== "PLAYING") return;
 
@@ -282,4 +282,3 @@ function draw() {
     ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
     ctx.font = "bold 13px monospace";
     ctx.fillText(`OBJETIVO: ${mission.objective}`, 20, 30);
-    ctx.fillText(`ESTADO DEL NÚCLEO: ${mission.hasIntel ? "ROBADO (¡Huye!)" : "EN LA BÓVEDA"}`, 20, 50);
