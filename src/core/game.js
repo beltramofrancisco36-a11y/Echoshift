@@ -82,15 +82,17 @@ window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") keys.Shift = false;
 });
 
-// Mecánica Estrella: Activar el Clon Temporal (¡AHORA SÍ REPARADO!)
+// Mecánica Estrella: Activar el Clon Temporal (¡SÚPER PROTEGIDO!)
 function triggerShiftMechanic() {
+    if (playerHistory.length === 0) return;
+
     ghost.historyRoute = [...playerHistory];
     ghost.currentFrame = 0;
     ghost.active = true;
 
-    // SOLUCIÓN: Acceder correctamente a la primera posición guardada en la lista del pasado
+    // REPARACIÓN DEFINITIVA: Leer el primer elemento de la lista de historial de forma 100% segura
     const firstPastFrame = playerHistory[0]; 
-    if (firstPastFrame && firstPastFrame.x !== undefined) {
+    if (firstPastFrame && firstPastFrame.x !== undefined && firstPastFrame.y !== undefined) {
         player.x = firstPastFrame.x;
         player.y = firstPastFrame.y;
     }
@@ -166,11 +168,13 @@ function update() {
     if (ghost.active) {
         if (ghost.currentFrame < ghost.historyRoute.length) {
             let frameData = ghost.historyRoute[ghost.currentFrame];
-            if (ghost.currentFrame % 25 === 0) {
-                spawnEcho(frameData.x + ghost.size/2, frameData.y + ghost.size/2, 130);
+            if (frameData && frameData.x !== undefined && frameData.y !== undefined) {
+                if (ghost.currentFrame % 25 === 0) {
+                    spawnEcho(frameData.x + ghost.size/2, frameData.y + ghost.size/2, 130);
+                }
+                ghost.x = frameData.x;
+                ghost.y = frameData.y;
             }
-            ghost.x = frameData.x;
-            ghost.y = frameData.y;
             ghost.currentFrame++;
         } else {
             ghost.active = false;
@@ -277,8 +281,4 @@ function draw() {
     }
 
     ctx.fillStyle = player.color;
-    ctx.fillRect(player.imgX, player.imgY, player.size, player.size);
 
-    ctx.fillStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.font = "bold 13px monospace";
-    ctx.fillText(`OBJETIVO: ${mission.objective}`, 20, 30);
